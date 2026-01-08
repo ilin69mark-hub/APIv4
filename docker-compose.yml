@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - COMMENT_SERVICE_URL=http://comment-service:8081
+      - CENSOR_SERVICE_URL=http://censor-service:8082
+      - NEWS_SERVICE_URL=http://news-aggregator:8083
+      - API_GATEWAY_PORT=8080
+    depends_on:
+      - comment-service
+      - censor-service
+      - news-aggregator
+    networks:
+      - microservice-network
+
+  comment-service:
+    build: ./comment-service
+    ports:
+      - "8081:8081"
+    environment:
+      - COMMENT_SERVICE_PORT=8081
+      - DB_PATH=/app/comments.db
+    volumes:
+      - comment-db:/app
+    networks:
+      - microservice-network
+
+  censor-service:
+    build: ./censor-service
+    ports:
+      - "8082:8082"
+    environment:
+      - CENSOR_SERVICE_PORT=8082
+    networks:
+      - microservice-network
+
+  news-aggregator:
+    build: ./news-aggregator
+    ports:
+      - "8083:8083"
+    environment:
+      - NEWS_SERVICE_PORT=8083
+    networks:
+      - microservice-network
+
+volumes:
+  comment-db:
+
+networks:
+  microservice-network:
+    driver: bridge

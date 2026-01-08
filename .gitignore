@@ -1,0 +1,42 @@
+```
+# Dependencies
+vendor/
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.a
+*.obj
+*.o
+*.out
+
+# Build artifacts
+bin/
+target/
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go-specific
+*.test
+*.prof
+```
