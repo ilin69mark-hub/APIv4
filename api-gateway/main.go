@@ -4,20 +4,44 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/google/uuid"
+	"github.com/go-chi/cors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 )
 
-// Response структура для унифицированного ответа
+// NewsAggregatorURL — URL внешнего сервиса новостей
+var NewsAggregatorURL = getEnv("NEWS_AGGREGATOR_URL", "http://news-aggregator:8083")
+
+// CommentServiceURL — URL сервиса комментариев
+var CommentServiceURL = getEnv("COMMENT_SERVICE_URL", "http://comment-service:8081")
+
+// CensorServiceURL — URL сервиса цензуры
+var CensorServiceURL = getEnv("CENSOR_SERVICE_URL", "http://censor-service:8082")
+
+// Config — конфигурация приложения
+type Config struct {
+	Port string
+}
+
+// App — структура приложения
+type App struct {
+	config Config
+	logger zerolog.Logger
+	router chi.Router
+}
+
+// Response — универсальная структура ответа
 type Response struct {
 	Status     string      `json:"status"`
 	Data       interface{} `json:"data,omitempty"`
@@ -25,7 +49,7 @@ type Response struct {
 	Pagination *Pagination `json:"pagination,omitempty"`
 }
 
-// Pagination структура для пагинации
+// Pagination — структура пагинации
 type Pagination struct {
 	Page      int `json:"page"`
 	PageSize  int `json:"page_size"`
@@ -33,368 +57,339 @@ type Pagination struct {
 	PageCount int `json:"page_count"`
 }
 
-// Comment структура комментария
+// News — структура новости
+type News struct {
+	ID      int    `json:"id"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Date    string `json:"date"`
+}
+
+// Comment — структура комментария
 type Comment struct {
-	ID        int       `json:"id"`
-	NewsID    int       `json:"news_id"`
-	ParentID  *int      `json:"parent_id,omitempty"`
-	Text      string    `json:"text"`
+	ID       int    `json:"id"`
+	NewsID   int    `json:"news_id"`
+	ParentID *int   `json:"parent_id,omitempty"`
+	Text     string `json:"text"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// News структура новости
-type News struct {
-	ID          int       `json:"id"`
-	Title       string    `json:"title"`
-	Content     string    `json:"content"`
-	CreatedAt   time.Time `json:"created_at"`
-	Comments    []Comment `json:"comments,omitempty"`
-}
-
-// Config конфигурация сервиса
-type Config struct {
-	Port             string
-	CommentServiceURL string
-	CensorServiceURL  string
-	NewsServiceURL    string
-}
-
-func main() {
-	config := &Config{
-		Port:             getEnv("API_GATEWAY_PORT", "8080"),
-		CommentServiceURL: getEnv("COMMENT_SERVICE_URL", "http://comment-service:8081"),
-		CensorServiceURL:  getEnv("CENSOR_SERVICE_URL", "http://censor-service:8082"),
-		NewsServiceURL:    getEnv("NEWS_SERVICE_URL", "http://news-aggregator:8083"),
-	}
-
-	r := chi.NewRouter()
-
-	// Middleware
-	r.Use(middleware.RequestID)
-	r.Use(LoggerMiddleware)
-	r.Use(middleware.Recoverer)
-	r.Use(TimeoutMiddleware(30 * time.Second))
-
-	// Health check endpoint
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Response{Status: "ok"})
-	})
-
-	// Маршруты API
-	r.Get("/news", GetNewsHandler(config))
-	r.Get("/news/{id}", GetNewsWithCommentsHandler(config))
-	r.Post("/comment", CreateCommentHandler(config))
-
-	server := &http.Server{
-		Addr:    ":" + config.Port,
-		Handler: r,
-	}
-
-	// Запуск сервера в горутине
-	go func() {
-		log.Printf("API Gateway запущен на порту %s", config.Port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Ошибка запуска сервера: %v", err)
-		}
-	}()
-
-	// Ожидание сигнала остановки
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt)
-	<-quit
-	log.Println("Завершение работы API Gateway...")
-
-	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Ошибка завершения работы сервера: %v", err)
-	}
-	log.Println("API Gateway успешно остановлен")
-}
-
-// LoggerMiddleware логирование запросов
-func LoggerMiddleware(next http.Handler) http.Handler {
+// RequestIDMiddleware — мидлвар для генерации/пропуска request_id
+func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-		
-		requestID := r.Context().Value(middleware.RequestIDKey)
-		if requestID == nil {
-			requestID = uuid.New().String()
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = generateRequestID()
 		}
-
-		log.Printf("[%s] %s %s %s", requestID, r.Method, r.URL.Path, r.RemoteAddr)
-
-		next.ServeHTTP(ww, r)
-
-		log.Printf("[%s] %s %s %d %v", requestID, r.Method, r.URL.Path, ww.Status(), time.Since(start))
+		ctx := context.WithValue(r.Context(), "request_id", requestID)
+		w.Header().Set("X-Request-ID", requestID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// TimeoutMiddleware middleware для таймаута запросов
+// generateRequestID — генерирует уникальный request_id
+func generateRequestID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// LoggerMiddleware — мидлвар для логирования запросов
+func LoggerMiddleware(logger *zerolog.Logger) func(http.Handler) http.Handler {
+	return hlog.NewHandler(*logger)
+}
+
+// TimeoutMiddleware — мидлвар для установки таймаута
 func TimeoutMiddleware(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, cancel := context.WithTimeout(r.Context(), timeout)
 			defer cancel()
-			
-			r = r.WithContext(ctx)
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// GetNewsHandler обработчик получения списка новостей
-func GetNewsHandler(config *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-		if page <= 0 {
-			page = 1
-		}
-		
-		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-		if pageSize <= 0 {
-			pageSize = 10
-		}
-		
-		search := r.URL.Query().Get("search")
-
-		// Запрос к сервису новостей
-		client := &http.Client{Timeout: 10 * time.Second}
-		url := fmt.Sprintf("%s/news?page=%d&page_size=%d", config.NewsServiceURL, page, pageSize)
-		if search != "" {
-			url += "&search=" + search
-		}
-		
-		resp, err := client.Get(url)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Ошибка получения новостей: %v", err), http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-
-		var newsResponse Response
-		if err := json.NewDecoder(resp.Body).Decode(&newsResponse); err != nil {
-			http.Error(w, "Ошибка декодирования ответа от сервиса новостей", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(newsResponse)
-	}
-}
-
-// GetNewsWithCommentsHandler обработчик получения новости с комментариями
-func GetNewsWithCommentsHandler(config *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		newsIDStr := chi.URLParam(r, "id")
-		newsID, err := strconv.Atoi(newsIDStr)
-		if err != nil {
-			http.Error(w, "Неверный ID новости", http.StatusBadRequest)
-			return
-		}
-
-		// Параллельные запросы к сервису новостей и комментариев
-		type result struct {
-			news     *News
-			comments []Comment
-			err      error
-		}
-		
-		ch := make(chan result, 2)
-		
-		// Запрос новости
-		go func() {
-			client := &http.Client{Timeout: 10 * time.Second}
-			resp, err := client.Get(fmt.Sprintf("%s/news/%d", config.NewsServiceURL, newsID))
-			if err != nil {
-				ch <- result{err: err}
-				return
-			}
-			defer resp.Body.Close()
-			
-			var newsResponse Response
-			if err := json.NewDecoder(resp.Body).Decode(&newsResponse); err != nil {
-				ch <- result{err: err}
-				return
-			}
-			
-			if news, ok := newsResponse.Data.(map[string]interface{}); ok {
-				newsObj := &News{
-					ID:        int(news["id"].(float64)),
-					Title:     news["title"].(string),
-					Content:   news["content"].(string),
-					CreatedAt: time.Now(), // в реальности дата придет из сервиса новостей
-				}
-				
-				// Преобразуем дату создания если она есть
-				if createdAt, ok := news["created_at"].(string); ok {
-					if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-						newsObj.CreatedAt = t
-					}
-				}
-				
-				ch <- result{news: newsObj}
-			} else {
-				ch <- result{err: fmt.Errorf("неверный формат данных новости")}
-			}
-		}()
-		
-		// Запрос комментариев
-		go func() {
-			client := &http.Client{Timeout: 10 * time.Second}
-			resp, err := client.Get(fmt.Sprintf("%s/comments?news_id=%d", config.CommentServiceURL, newsID))
-			if err != nil {
-				ch <- result{err: err}
-				return
-			}
-			defer resp.Body.Close()
-			
-			var commentsResponse Response
-			if err := json.NewDecoder(resp.Body).Decode(&commentsResponse); err != nil {
-				ch <- result{err: err}
-				return
-			}
-			
-			var comments []Comment
-			if data, ok := commentsResponse.Data.([]interface{}); ok {
-				for _, c := range data {
-					if commentMap, ok := c.(map[string]interface{}); ok {
-						newComment := Comment{
-							ID:      int(commentMap["id"].(float64)),
-							NewsID:  int(commentMap["news_id"].(float64)),
-							Text:    commentMap["text"].(string),
-							CreatedAt: time.Now(), // в реальности дата придет из сервиса комментариев
-						}
-						
-						// Преобразуем дату создания если она есть
-						if createdAt, ok := commentMap["created_at"].(string); ok {
-							if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-								newComment.CreatedAt = t
-							}
-						}
-						
-						// Обработка parent_id если он есть
-						if parentID, exists := commentMap["parent_id"]; exists && parentID != nil {
-							pid := int(parentID.(float64))
-							newComment.ParentID = &pid
-						}
-						
-						comments = append(comments, newComment)
-					}
-				}
-			}
-			
-			ch <- result{comments: comments}
-		}()
-		
-		// Сбор результатов
-		var news *News
-		var comments []Comment
-		
-		for i := 0; i < 2; i++ {
-			res := <-ch
-			if res.err != nil {
-				http.Error(w, fmt.Sprintf("Ошибка получения данных: %v", res.err), http.StatusInternalServerError)
-				return
-			}
-			
-			if res.news != nil {
-				news = res.news
-			} else if res.comments != nil {
-				comments = res.comments
-			}
-		}
-		
-		// Привязка комментариев к новости
-		if news != nil {
-			news.Comments = comments
-		}
-		
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Response{
-			Status: "success",
-			Data:   news,
-		})
-	}
-}
-
-// CreateCommentHandler обработчик создания комментария
-func CreateCommentHandler(config *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			NewsID   int    `json:"news_id"`
-			ParentID *int   `json:"parent_id,omitempty"`
-			Text     string `json:"text"`
-		}
-		
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Неверный формат тела запроса", http.StatusBadRequest)
-			return
-		}
-		
-		// Проверка текста на запрещенные слова через CensorService
-		client := &http.Client{Timeout: 10 * time.Second}
-		censorReq := map[string]string{"text": req.Text}
-		censorReqBytes, _ := json.Marshal(censorReq)
-		
-		resp, err := client.Post(
-			fmt.Sprintf("%s/check", config.CensorServiceURL),
-			"application/json",
-			strings.NewReader(string(censorReqBytes)),
-		)
-		if err != nil {
-			http.Error(w, "Ошибка проверки текста", http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-		
-		if resp.StatusCode != http.StatusOK {
-			http.Error(w, "Текст содержит запрещенные слова", http.StatusBadRequest)
-			return
-		}
-		
-		// Отправка комментария в CommentService
-		commentReq := map[string]interface{}{
-			"news_id":   req.NewsID,
-			"text":      req.Text,
-			"parent_id": req.ParentID,
-		}
-		commentReqBytes, _ := json.Marshal(commentReq)
-		
-		resp, err = client.Post(
-			fmt.Sprintf("%s/comments", config.CommentServiceURL),
-			"application/json",
-			strings.NewReader(string(commentReqBytes)),
-		)
-		if err != nil {
-			http.Error(w, "Ошибка сохранения комментария", http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-		
-		if resp.StatusCode != http.StatusOK {
-			http.Error(w, "Ошибка сохранения комментария", resp.StatusCode)
-			return
-		}
-		
-		var commentResp Response
-		if err := json.NewDecoder(resp.Body).Decode(&commentResp); err != nil {
-			http.Error(w, "Ошибка декодирования ответа от сервиса комментариев", http.StatusInternalServerError)
-			return
-		}
-		
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(commentResp)
-	}
-}
-
-// getEnv вспомогательная функция для получения переменных окружения
+// getEnv — получает значение переменной окружения или возвращает значение по умолчанию
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
 	return defaultValue
+}
+
+// NewApp — создает новое приложение
+func NewApp(config Config) *App {
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	r := chi.NewRouter()
+
+	// Middleware
+	r.Use(middleware.Recoverer)
+	r.Use(RequestIDMiddleware)
+	r.Use(LoggerMiddleware(&logger))
+	r.Use(TimeoutMiddleware(30 * time.Second))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
+
+	app := &App{
+		config: config,
+		logger: logger,
+		router: r,
+	}
+
+	// Routes
+	r.Get("/health", app.HealthCheck)
+	r.Get("/news", app.GetNews)
+	r.Get("/news/{id}", app.GetNewsByID)
+	r.Post("/comment", app.CreateComment)
+
+	return app
+}
+
+// HealthCheck — проверка состояния сервиса
+func (a *App) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(Response{Status: "ok"})
+}
+
+// GetNews — получение списка новостей с пагинацией и поиском
+func (a *App) GetNews(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+	search := r.URL.Query().Get("search")
+
+	// Валидация параметров
+	if len(search) > 100 {
+		a.sendError(w, http.StatusBadRequest, "Search query too long")
+		return
+	}
+
+	// Формирование URL для запроса к News Aggregator
+	u, err := url.Parse(NewsAggregatorURL + "/news")
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to parse news aggregator URL")
+		return
+	}
+	q := u.Query()
+	q.Set("page", strconv.Itoa(page))
+	q.Set("page_size", strconv.Itoa(pageSize))
+	if search != "" {
+		q.Set("search", search)
+	}
+	u.RawQuery = q.Encode()
+
+	resp, err := http.Get(u.String())
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to fetch news")
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to read news response")
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		a.sendError(w, resp.StatusCode, string(body))
+		return
+	}
+
+	var newsResponse Response
+	if err := json.Unmarshal(body, &newsResponse); err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to parse news response")
+		return
+	}
+
+	a.sendResponse(w, http.StatusOK, newsResponse.Data, &Pagination{
+		Page:     page,
+		PageSize: pageSize,
+		Total:    100, // В реальном приложении это должно приходить из News Aggregator
+		PageCount: 10, // В реальном приложении это должно приходить из News Aggregator
+	})
+}
+
+// GetNewsByID — получение новости по ID с комментариями
+func (a *App) GetNewsByID(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	newsID, err := strconv.Atoi(id)
+	if err != nil || newsID < 1 {
+		a.sendError(w, http.StatusBadRequest, "Invalid news ID")
+		return
+	}
+
+	// Запрос деталей новости
+	newsURL := fmt.Sprintf("%s/news/%d", NewsAggregatorURL, newsID)
+	newsResp, err := http.Get(newsURL)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to fetch news details")
+		return
+	}
+	defer newsResp.Body.Close()
+
+	newsBody, err := io.ReadAll(newsResp.Body)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to read news details")
+		return
+	}
+
+	if newsResp.StatusCode != http.StatusOK {
+		a.sendError(w, newsResp.StatusCode, string(newsBody))
+		return
+	}
+
+	var newsResponse Response
+	if err := json.Unmarshal(newsBody, &newsResponse); err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to parse news details")
+		return
+	}
+
+	// Запрос комментариев
+	commentsURL := fmt.Sprintf("%s/comments?news_id=%d", CommentServiceURL, newsID)
+	commentsResp, err := http.Get(commentsURL)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to fetch comments")
+		return
+	}
+	defer commentsResp.Body.Close()
+
+	commentsBody, err := io.ReadAll(commentsResp.Body)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to read comments")
+		return
+	}
+
+	if commentsResp.StatusCode != http.StatusOK {
+		a.sendError(w, commentsResp.StatusCode, string(commentsBody))
+		return
+	}
+
+	var commentsResponse Response
+	if err := json.Unmarshal(commentsBody, &commentsResponse); err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to parse comments")
+		return
+	}
+
+	// Агрегация результатов
+	result := map[string]interface{}{
+		"news":      newsResponse.Data,
+		"comments":  commentsResponse.Data,
+	}
+
+	a.sendResponse(w, http.StatusOK, result, nil)
+}
+
+// CreateComment — создание комментария
+func (a *App) CreateComment(w http.ResponseWriter, r *http.Request) {
+	var comment Comment
+	if err := json.NewDecoder(r.Body).Decode(&comment); err != nil {
+		a.sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Проверка текста на наличие запрещённых слов
+	censorURL := CensorServiceURL + "/check"
+	censorPayload := map[string]string{"text": comment.Text}
+	censorBody, err := json.Marshal(censorPayload)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to marshal censor request")
+		return
+	}
+
+	resp, err := http.Post(censorURL, "application/json", strings.NewReader(string(censorBody)))
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to check comment for censorship")
+		return
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		a.sendError(w, http.StatusBadRequest, "Comment contains forbidden words")
+		return
+	}
+
+	// Отправка комментария в Comment Service
+	commentsURL := CommentServiceURL + "/comments"
+	commentsBody, err := json.Marshal(comment)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to marshal comment")
+		return
+	}
+
+	resp, err = http.Post(commentsURL, "application/json", strings.NewReader(string(commentsBody)))
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to create comment")
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to read comment response")
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		a.sendError(w, resp.StatusCode, string(body))
+		return
+	}
+
+	var commentResponse Response
+	if err := json.Unmarshal(body, &commentResponse); err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Failed to parse comment response")
+		return
+	}
+
+	a.sendResponse(w, http.StatusOK, commentResponse.Data, nil)
+}
+
+// sendResponse — отправляет успешный JSON-ответ
+func (a *App) sendResponse(w http.ResponseWriter, statusCode int, data interface{}, pagination *Pagination) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(Response{
+		Status:     "success",
+		Data:       data,
+		Pagination: pagination,
+	})
+}
+
+// sendError — отправляет JSON-ответ с ошибкой
+func (a *App) sendError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(Response{
+		Status: "error",
+		Error:  message,
+	})
+}
+
+// Run — запускает HTTP-сервер
+func (a *App) Run() error {
+	return http.ListenAndServe(":"+a.config.Port, a.router)
+}
+
+func main() {
+	config := Config{
+		Port: getEnv("PORT", "8080"),
+	}
+
+	app := NewApp(config)
+
+	log.Printf("API Gateway запущен на порту %s", config.Port)
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
