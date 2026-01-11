@@ -110,6 +110,7 @@ func NewApp(config Config) *App {
 	r.Get("/health", app.HealthCheck)
 	r.Post("/comments", app.CreateComment)
 	r.Get("/comments", app.GetCommentsByNewsID)
+	r.Delete("/comments/{id}", app.DeleteComment)
 
 	return app
 }
@@ -204,6 +205,35 @@ func (a *App) GetCommentsByNewsID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.sendResponse(w, http.StatusOK, comments)
+}
+
+func (a *App) DeleteComment(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id < 1 {
+		a.sendError(w, http.StatusBadRequest, "Invalid comment ID")
+		return
+	}
+
+	result, err := db.Exec("DELETE FROM comments WHERE id = ?", id)
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		a.sendError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+
+	if rowsAffected == 0 {
+		a.sendError(w, http.StatusNotFound, "Comment not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(Response{Status: "success", Data: "Comment deleted"})
 }
 
 func (a *App) sendResponse(w http.ResponseWriter, statusCode int, data interface{}) {

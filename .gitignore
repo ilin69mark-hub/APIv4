@@ -39,4 +39,5 @@ Thumbs.db
 # Go-specific
 *.test
 *.prof
-```
+```postman/*.backup.json
+postman/__history__/
