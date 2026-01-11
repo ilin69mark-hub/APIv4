@@ -69,11 +69,18 @@ func NewApp(config Config) *App {
 		router: r,
 	}
 
+	r.Get("/", app.Home)
 	r.Get("/health", app.HealthCheck)
 	r.Get("/news", app.GetNews)
 	r.Get("/news/{id}", app.GetNewsByID)
 
 	return app
+}
+
+func (a *App) Home(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("News Aggregator OK"))
 }
 
 func (a *App) HealthCheck(w http.ResponseWriter, r *http.Request) {

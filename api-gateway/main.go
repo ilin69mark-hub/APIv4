@@ -143,12 +143,20 @@ func NewApp(config Config) *App {
 	}
 
 	// Routes
+	r.Get("/", app.Home)
 	r.Get("/health", app.HealthCheck)
 	r.Get("/news", app.GetNews)
 	r.Get("/news/{id}", app.GetNewsByID)
 	r.Post("/comment", app.CreateComment)
 
 	return app
+}
+
+// Home — главная страница
+func (a *App) Home(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "API Gateway OK")
 }
 
 // HealthCheck — проверка состояния сервиса

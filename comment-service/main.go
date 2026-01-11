@@ -20,7 +20,7 @@ import (
 var db *sql.DB
 
 type Config struct {
-	Port string
+	Port   string
 	DBPath string
 }
 
@@ -31,17 +31,17 @@ type App struct {
 }
 
 type Comment struct {
-	ID        int        `json:"id"`
-	NewsID    int        `json:"news_id"`
-	ParentID  *int       `json:"parent_id,omitempty"`
-	Text      string     `json:"text"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID        int       `json:"id"`
+	NewsID    int       `json:"news_id"`
+	ParentID  *int      `json:"parent_id,omitempty"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Response struct {
-	Status     string      `json:"status"`
-	Data       interface{} `json:"data,omitempty"`
-	Error      string      `json:"error,omitempty"`
+	Status string      `json:"status"`
+	Data   interface{} `json:"data,omitempty"`
+	Error  string      `json:"error,omitempty"`
 }
 
 func getEnv(key, defaultValue string) string {
@@ -92,7 +92,6 @@ func NewApp(config Config) *App {
 		log.Fatal(err)
 	}
 
-	// Создание таблицы
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS comments (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,11 +106,18 @@ func NewApp(config Config) *App {
 		log.Fatal(err)
 	}
 
+	r.Get("/", app.Home)
 	r.Get("/health", app.HealthCheck)
 	r.Post("/comments", app.CreateComment)
 	r.Get("/comments", app.GetCommentsByNewsID)
 
 	return app
+}
+
+func (a *App) Home(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Comment Service OK"))
 }
 
 func (a *App) HealthCheck(w http.ResponseWriter, r *http.Request) {

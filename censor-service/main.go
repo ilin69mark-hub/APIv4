@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,10 +84,17 @@ func NewApp(config Config) *App {
 		router: r,
 	}
 
+	r.Get("/", app.Home)
 	r.Get("/health", app.HealthCheck)
 	r.Post("/check", app.CheckText)
 
 	return app
+}
+
+func (a *App) Home(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Censor Service OK"))
 }
 
 func (a *App) HealthCheck(w http.ResponseWriter, r *http.Request) {
