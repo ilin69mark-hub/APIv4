@@ -1,0 +1,912 @@
+{
+	"info": {
+		"_postman_id": "23c22825-79d8-4b1d-a7a8-03656743d831",
+		"name": "Микросервисная архитектура - API Тесты",
+		"description": "Коллекция для тестирования микросервисной архитектуры на Go",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "51353741",
+		"_collection_link": "https://ilin69mark-hub-5397238.postman.co/workspace/Mark's-Workspace~c92bf5e4-8b84-4896-8fe2-f0edd9ba43c3/collection/51353741-23c22825-79d8-4b1d-a7a8-03656743d831?action=share&source=collection_link&creator=51353741"
+	},
+	"item": [
+		{
+			"name": "API Gateway",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Health check is OK - Status 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"})",
+									"",
+									"pm.test('Response time is acceptable (< 1000ms)', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);",
+									"})",
+									"",
+									"pm.test('Response body contains status field', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"})"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/health",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Получить список новостей",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('News list loaded successfully - Status 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"})",
+									"",
+									"pm.test('Response time is acceptable (< 1000ms)', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);",
+									"})",
+									"",
+									"pm.test('Response is a valid JSON', function () {",
+									"    pm.response.to.be.json;",
+									"})"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/news?page=1&page_size=10",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"news"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Получить новость с комментариями",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Получить новость с комментариями - Статус 200', function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Структура ответа содержит news и comments', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData).to.have.property('data');\r",
+									"    pm.expect(jsonData.data).to.have.property('news');\r",
+									"    pm.expect(jsonData.data).to.have.property('comments');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL}}/news/1",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"news",
+								"1"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Создать комментарий",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Статус ответа 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Поле status имеет значение 'success'\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"status\");",
+									"    pm.expect(jsonData.status).to.eql(\"success\");",
+									"});",
+									"",
+									"pm.test(\"Поле data — объект с данными комментария\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"data\");",
+									"    pm.expect(jsonData.data).to.be.an(\"object\");",
+									"});",
+									"",
+									"pm.test(\"Поле data.id — число\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"id\");",
+									"    pm.expect(jsonData.data.id).to.be.a(\"number\");",
+									"});",
+									"",
+									"pm.test(\"Поле data.news_id — число\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"news_id\");",
+									"    pm.expect(jsonData.data.news_id).to.be.a(\"number\");",
+									"});",
+									"",
+									"pm.test(\"Поле data.text — строка\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property(\"text\");",
+									"    pm.expect(jsonData.data.text).to.be.a(\"string\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"news_id\": 1,\n  \"text\": \"Это тестовый комментарий\"\n}"
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/comment",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"comment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Создать комментарий с запрещенным словом",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Статус ответа 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test(\"Поле status имеет значение 'error'\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"status\");",
+									"    pm.expect(jsonData.status).to.eql(\"error\");",
+									"});",
+									"",
+									"pm.test(\"Поле error — строка и содержит 'forbidden'\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"error\");",
+									"    pm.expect(jsonData.error).to.be.a(\"string\");",
+									"    pm.expect(jsonData.error.toLowerCase()).to.include(\"forbidden\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"news_id\": 1,\n  \"text\": \"Этот текст содержит запрещенное слово qwerty\"\n}"
+						},
+						"url": {
+							"raw": "{{BASE_URL}}/comment",
+							"host": [
+								"{{BASE_URL}}"
+							],
+							"path": [
+								"comment"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Comment Service",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Health Check - Статус 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Ответ является валидным JSON', function () {",
+									"    pm.response.to.be.json;",
+									"});",
+									"",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);",
+									"});",
+									"",
+									"pm.test('Поле status присутствует и равно ok', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData.status).to.eql('ok');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL_COMMENT}}/health",
+							"host": [
+								"{{BASE_URL_COMMENT}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Получить комментарии для новости",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Получение комментариев - Статус 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Ответ является валидным JSON', function () {",
+									"    pm.response.to.be.json;",
+									"});",
+									"",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);",
+									"});",
+									"",
+									"pm.test('Поле status равно success', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData.status).to.eql('success');",
+									"});",
+									"",
+									"pm.test('Поле data содержит массив комментариев', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('data');",
+									"    pm.expect(jsonData.data).to.be.an('array');",
+									"});",
+									"",
+									"pm.test('Каждый комментарий имеет обязательные поля (id, news_id, text)', function () {",
+									"    const jsonData = pm.response.json();",
+									"    const comments = jsonData.data;",
+									"    if (comments.length > 0) {",
+									"        comments.forEach(function(comment) {",
+									"            pm.expect(comment).to.have.property('id');",
+									"            pm.expect(comment.id).to.be.a('number');",
+									"            pm.expect(comment).to.have.property('news_id');",
+									"            pm.expect(comment.news_id).to.be.a('number');",
+									"            pm.expect(comment).to.have.property('text');",
+									"            pm.expect(comment.text).to.be.a('string');",
+									"        });",
+									"    }",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL_COMMENT}}/comments?news_id=1&page=1&page_size=10",
+							"host": [
+								"{{BASE_URL_COMMENT}}"
+							],
+							"path": [
+								"comments"
+							],
+							"query": [
+								{
+									"key": "news_id",
+									"value": "1"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Создать комментарий",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Создание комментария - Статус 200 или 201', function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+									"});",
+									"",
+									"pm.test('Ответ является валидным JSON', function () {",
+									"    pm.response.to.be.json;",
+									"});",
+									"",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);",
+									"});",
+									"",
+									"pm.test('Поле status равно success', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData.status).to.eql('success');",
+									"});",
+									"",
+									"pm.test('Поле data содержит объект созданного комментария', function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('data');",
+									"    pm.expect(jsonData.data).to.be.an('object');",
+									"});",
+									"",
+									"pm.test('Комментарий имеет обязательные поля (id, news_id, text)', function () {",
+									"    const jsonData = pm.response.json();",
+									"    const comment = jsonData.data;",
+									"    pm.expect(comment).to.have.property('id');",
+									"    pm.expect(comment.id).to.be.a('number');",
+									"    pm.expect(comment).to.have.property('news_id');",
+									"    pm.expect(comment.news_id).to.be.a('number');",
+									"    pm.expect(comment).to.have.property('text');",
+									"    pm.expect(comment.text).to.be.a('string');",
+									"});",
+									"",
+									"pm.test('news_id и text соответствуют отправленным данным', function () {",
+									"    const jsonData = pm.response.json();",
+									"    const comment = jsonData.data;",
+									"    const requestBody = JSON.parse(pm.request.body.raw);",
+									"    pm.expect(comment.news_id).to.eql(requestBody.news_id);",
+									"    pm.expect(comment.text).to.eql(requestBody.text);",
+									"});",
+									"",
+									"// Сохраняем ID созданного комментария для последующего удаления",
+									"pm.test('Сохранение ID комментария в переменную', function () {",
+									"    const jsonData = pm.response.json();",
+									"    const comment = jsonData.data;",
+									"    if (comment && comment.id) {",
+									"        pm.collectionVariables.set('CREATED_COMMENT_ID', comment.id);",
+									"        console.log('Сохранён ID комментария: ' + comment.id);",
+									"    }",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"news_id\": 1,\n  \"text\": \"Прямое добавление комментария в Comment Service\",\n  \"parent_id\": null\n}"
+						},
+						"url": {
+							"raw": "{{BASE_URL_COMMENT}}/comments",
+							"host": [
+								"{{BASE_URL_COMMENT}}"
+							],
+							"path": [
+								"comments"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Удалить комментарий",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Удаление комментария - Статус 200 или 204', function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+									"});",
+									"",
+									"pm.test('Время ответа приемлемое (< 3000ms)', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(3000);",
+									"});",
+									"",
+									"// Проверка тела ответа, если оно есть",
+									"if (pm.response.text() && pm.response.text().length > 0) {",
+									"    pm.test('Ответ является валидным JSON (если есть тело)', function () {",
+									"        pm.response.to.be.json;",
+									"    });",
+									"",
+									"    pm.test('Статус успешного удаления (если есть тело)', function () {",
+									"        const jsonData = pm.response.json();",
+									"        if (jsonData.status) {",
+									"            pm.expect(jsonData.status).to.be.oneOf(['success', 'ok', 'deleted']);",
+									"        }",
+									"    });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL_COMMENT}}/comments/12",
+							"host": [
+								"{{BASE_URL_COMMENT}}"
+							],
+							"path": [
+								"comments",
+								"12"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Censor Service",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Health Check - Статус 200', function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Поле status присутствует и равно ok', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData).to.have.property('status');\r",
+									"    pm.expect(jsonData.status).to.eql('ok');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL_CENSOR}}/health",
+							"host": [
+								"{{BASE_URL_CENSOR}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Проверить текст без запрещенных слов",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Проверка текста - Статус 200', function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Статус \"success\" при отсутствии запрещённых слов', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData.status).to.eql('success');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"text\": \"Этот текст не содержит запрещенных слов\"\n}"
+						},
+						"url": {
+							"raw": "{{BASE_URL_CENSOR}}/check",
+							"host": [
+								"{{BASE_URL_CENSOR}}"
+							],
+							"path": [
+								"check"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Проверить текст с запрещенным словом",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Проверка текста с запрещённым словом - Статус 400', function () {\r",
+									"    pm.response.to.have.status(400);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ошибка \"forbidden words\" при наличии запрещённого слова', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData.error).to.include('forbidden words');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"text\": \"Этот текст содержит запрещенное слово qwerty\"\n}"
+						},
+						"url": {
+							"raw": "{{BASE_URL_CENSOR}}/check",
+							"host": [
+								"{{BASE_URL_CENSOR}}"
+							],
+							"path": [
+								"check"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Проверить текст с кириллическим запрещенным словом",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Проверка текста с кириллическим запрещённым словом - Статус 400', function () {\r",
+									"    pm.response.to.have.status(400);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ошибка \"forbidden words\" при наличии кириллического запрещённого слова', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData.error).to.include('forbidden words');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"text\": \"Этот текст содержит кириллическое запрещенное слово йцукен\"\n}"
+						},
+						"url": {
+							"raw": "{{BASE_URL_CENSOR}}/check",
+							"host": [
+								"{{BASE_URL_CENSOR}}"
+							],
+							"path": [
+								"check"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "News Aggregator",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Health Check - Статус 200', function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Поле status присутствует и равно ok', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData).to.have.property('status');\r",
+									"    pm.expect(jsonData.status).to.eql('ok');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL_AGGREGATOR}}/health",
+							"host": [
+								"{{BASE_URL_AGGREGATOR}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Получить список новостей",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Получить список новостей - Статус 200', function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Поле status присутствует и равно success', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData).to.have.property('status');\r",
+									"    pm.expect(jsonData.status).to.eql('success');\r",
+									"});\r",
+									"\r",
+									"pm.test('Поле data содержит массив новостей', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData.data).to.be.an('array');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL_AGGREGATOR}}/news?page=1&page_size=10",
+							"host": [
+								"{{BASE_URL_AGGREGATOR}}"
+							],
+							"path": [
+								"news"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Получить новость по ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Получить новость по ID - Статус 200', function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"\r",
+									"pm.test('Ответ является валидным JSON', function () {\r",
+									"    pm.response.to.be.json;\r",
+									"});\r",
+									"\r",
+									"pm.test('Время ответа приемлемое (< 1000ms)', function () {\r",
+									"    pm.expect(pm.response.responseTime).to.be.below(1000);\r",
+									"});\r",
+									"\r",
+									"pm.test('Поле status присутствует и равно success', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData).to.have.property('status');\r",
+									"    pm.expect(jsonData.status).to.eql('success');\r",
+									"});\r",
+									"\r",
+									"pm.test('Поле data содержит новость', function () {\r",
+									"    const jsonData = pm.response.json();\r",
+									"    pm.expect(jsonData).to.have.property('data');\r",
+									"    pm.expect(jsonData.data).to.be.an('object');\r",
+									"    pm.expect(jsonData.data).to.have.property('id');\r",
+									"    pm.expect(jsonData.data).to.have.property('title');\r",
+									"    pm.expect(jsonData.data).to.have.property('content');\r",
+									"    pm.expect(jsonData.data).to.have.property('date');\r",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{BASE_URL_AGGREGATOR}}/news/1",
+							"host": [
+								"{{BASE_URL_AGGREGATOR}}"
+							],
+							"path": [
+								"news",
+								"1"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "CREATED_COMMENT_ID",
+			"value": ""
+		}
+	]
+}
