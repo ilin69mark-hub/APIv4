@@ -75,6 +75,6 @@ docker-compose up --build
 make build — собрать бинарники Go.
 make docker-build — создать Docker-образы.
 make docker-run — запустить всё в контейнерах.
-
+docker-compose down - остановка всех контейнеров.
 Исправлены существенные недостатки. Версия 4
 
